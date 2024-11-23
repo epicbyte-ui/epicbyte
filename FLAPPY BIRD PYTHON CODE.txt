@@ -1,0 +1,118 @@
+from kivy.app import App
+from kivy.uix.widget import Widget
+from kivy.uix.label import Label
+from kivy.clock import Clock
+from kivy.graphics import Rectangle, Color
+from random import randint
+
+# Game Constants
+PIPE_WIDTH = 80
+PIPE_GAP = 200
+BIRD_SIZE = 40
+GRAVITY = -0.3
+FLAP_STRENGTH = 8
+
+
+class Bird(Widget):
+    """The bird that the player controls."""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.size = (BIRD_SIZE, BIRD_SIZE)
+        self.velocity_y = 0
+        with self.canvas:
+            Color(1, 0, 0)  # Red color for the bird
+            self.rect = Rectangle(size=self.size, pos=self.pos)
+
+    def move(self):
+        self.velocity_y += GRAVITY
+        self.y += self.velocity_y
+        self.rect.pos = self.pos  # Update position of the bird
+
+
+class Pipe(Widget):
+    """Pipes that the bird must navigate through."""
+    def __init__(self, x, **kwargs):
+        super().__init__(**kwargs)
+        self.width = PIPE_WIDTH
+        self.height_top = randint(150, self.parent.height - PIPE_GAP - 150) if self.parent else 300
+        self.height_bottom = self.parent.height - self.height_top - PIPE_GAP if self.parent else 200
+        self.size = (PIPE_WIDTH, self.height_top)
+        self.x = x
+
+        with self.canvas:
+            Color(0, 1, 0)  # Green color for the pipes
+            # Top pipe
+            self.top_rect = Rectangle(size=(PIPE_WIDTH, self.height_top), pos=(x, self.parent.height - self.height_top) if self.parent else (x, 500))
+            # Bottom pipe
+            self.bottom_rect = Rectangle(size=(PIPE_WIDTH, self.height_bottom), pos=(x, 0))
+
+    def move(self, speed):
+        self.x -= speed
+        self.top_rect.pos = (self.x, self.parent.height - self.height_top)
+        self.bottom_rect.pos = (self.x, 0)
+
+
+class FlappyBirdGame(Widget):
+    """The main game widget."""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.bird = Bird(pos=(100, self.height // 2))
+        self.pipes = []
+        self.score = 0
+        self.speed = 4
+        self.gravity = GRAVITY
+        self.add_widget(self.bird)
+        self.spawn_pipe()
+        self.score_label = Label(text=f"Score: {self.score}", pos=(10, self.height - 40))
+        self.add_widget(self.score_label)
+        Clock.schedule_interval(self.update, 1/60)
+
+    def spawn_pipe(self):
+        """Spawns a new set of pipes."""
+        pipe = Pipe(x=self.width)
+        self.pipes.append(pipe)
+        self.add_widget(pipe)
+
+    def on_touch_down(self, touch):
+        """Makes the bird flap."""
+        self.bird.velocity_y = FLAP_STRENGTH
+
+    def update(self, dt):
+        """Update game state."""
+        # Move the bird
+        self.bird.move()
+
+        # Move pipes
+        for pipe in self.pipes:
+            pipe.move(self.speed)
+
+        # Remove pipes that have gone off-screen and spawn new ones
+        if self.pipes and self.pipes[0].x + PIPE_WIDTH < 0:
+            self.remove_widget(self.pipes.pop(0))
+            self.spawn_pipe()
+            self.score += 1
+            self.score_label.text = f"Score: {self.score}"
+
+        # Check for collisions
+        for pipe in self.pipes:
+            if (
+                self.bird.collide_widget(pipe) or
+                self.bird.top > self.height or
+                self.bird.y < 0
+            ):
+                self.game_over()
+
+    def game_over(self):
+        """Ends the game."""
+        Clock.unschedule(self.update)
+        self.add_widget(Label(text="Game Over!", pos=(self.width / 2 - 100, self.height / 2)))
+
+
+class FlappyBirdApp(App):
+    """The main application class."""
+    def build(self):
+        return FlappyBirdGame()
+
+
+if __name__ == "__main__":
+    FlappyBirdApp().run()
